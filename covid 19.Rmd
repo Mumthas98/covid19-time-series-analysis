@@ -1,0 +1,223 @@
+---
+Time Series Analysis of COVID-19 Data Using R
+---
+
+#Load Required Libraries
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(ggplot2)
+library(janitor)
+library(zoo)
+```
+
+#Import the Dataset
+
+```{r}
+covid19_data<-read.csv("X:/01StaffRoom/Mumthas/covid_19_data.csv", stringsAsFactors = FALSE)
+
+covid19_data
+```
+
+#Check the structure:
+```{r}
+str(covid19_data)
+```
+
+#Display first 10 rows
+
+```{r}
+head(covid19_data, 10)
+```
+
+#Standardize column names
+
+```{r}
+covid19_data<- clean_names(covid19_data)
+```
+
+#DATA CLEANING
+
+```{r}
+covid19_data<- covid19_data %>% select(-last_update)
+```
+
+#Convert date column to date format
+
+```{r}
+covid19_data$observation_date<-as.Date(covid19_data$observation_date, format="%m/%d/%Y")
+```
+
+```{r}
+covid19_data <- covid19_data %>%
+  mutate(across(where(is.character), ~ na_if(.x, "")))
+```
+
+
+#Check Missing Values
+
+```{r}
+colSums(is.na(covid19_data))
+```
+#Replace missing province_state with unknown
+```{r}
+covid19_data<-covid19_data %>% mutate(province_state=replace_na(province_state,"unknown"))
+```
+
+#Duplicate Values
+
+```{r}
+sum(duplicated(covid19_data))
+```
+
+```{r}
+covid19_data<- covid19_data %>% mutate(country_region= if_else(country_region=="Mainland China", "China", country_region))
+```
+
+
+#Month from observation date
+
+```{r}
+covid19_data<- covid19_data %>% mutate(month= month(observation_date, label = TRUE))
+```
+
+
+#How has the number of confirmed COVID-19 cases, deaths, and recoveries changed over time in a specific country?
+
+```{r}
+covid19_India <- covid19_data %>% filter(country_region=="India")
+covid19_India
+```
+
+```{r}
+cases_india<-covid19_India %>% group_by(observation_date) %>% 
+  summarise( total_cases_confirmed = sum(confirmed),
+             total_deaths_confirmed = sum(deaths),
+             total_cases_recovered = sum(recovered),
+             .groups = "drop")
+
+cases_india
+```
+
+
+```{r}
+ggplot(cases_india, aes(x=observation_date, y=total_cases_recovered))+
+  geom_line(color="chocolate", linewidth = 1)+
+  labs(title="Recovery rate in India",
+       x="Date", y="Recovery Rate(%)")
+```
+
+
+
+
+
+#What is the trend of confirmed cases, deaths, and recoveries in India over time?
+
+#Plot Confirmed Cases Trend
+
+```{r}
+ggplot(cases_india, aes(x=observation_date, y=total_cases_confirmed ))+
+  geom_line(color="blue", linewidth=1)+
+  scale_y_log10()+
+  labs(title="COCID-19 confirmed cases trends in INDIA",
+       x="Date", y="Number of confirmed cases")+
+  theme_classic()
+```
+
+#Plot death Cases Trend
+
+```{r}
+ggplot(cases_india, aes(x=observation_date, y=total_deaths_confirmed ))+
+  geom_line(color="blue", linewidth=1)+
+ labs(title="COCID-19 deaths confirmed trends in INDIA",
+       x="Date", y="Number of confirmed deaths")+
+  theme_classic()
+```
+
+##Plot recovered  Cases Trend
+
+```{r}
+ggplot(cases_india, aes(x=observation_date, y=total_cases_recovered ))+
+  geom_line(color="blue", linewidth=1)+
+ labs(title="COCID-19 recovered  cases trends in INDIA",
+       x="Date", y="Number of recovered cases")+
+  theme_classic()
+```
+
+#Fatality & Recovery Rate Analysis
+
+```{r}
+covid19_India<- covid19_India %>% mutate(
+  fatality_rate= deaths/confirmed*100,
+  recovery_rate= recovered/confirmed*100
+  )
+```
+
+#daily new COVID-19 cases change over time in India
+
+```{r}
+cases_india<- cases_india %>% 
+  arrange(observation_date) %>%
+  mutate(daily_new_cases = total_cases_confirmed -lag(total_cases_confirmed ,default=0) )
+```
+
+#Plot daily new cases in India
+
+```{r}
+ggplot(cases_india, aes(x=observation_date, y=daily_new_cases))+
+  geom_line(color= "red", linewidth = 1)+
+  labs(title="Daily New COVID-19 Cases in India",
+       x="Date", y="Daily new cases")
+  
+  
+```
+
+#What is the smoothed trend of COVID-19 spread in India?
+
+```{r}
+cases_india <- cases_india %>%
+  mutate(seven_day_average = rollmean(daily_new_cases,7, fill=NA))
+```
+
+# Plot 7 Day moving average
+
+```{r}
+ggplot(cases_india, aes(x=observation_date)) +
+  geom_line(aes(y=daily_new_cases),alpha=0.05)+
+  geom_line(aes(y=seven_day_average),color="blue", linewidth=1 )+
+  labs(title="Seven Day Moving Averages of Daily new Covid19 Caes in India",
+       x="date", y="Cases")
+```
+
+
+#How did COVID-19 cases evolve on a monthly basis in India?
+
+```{r}
+monthly_cases_india<- covid19_India %>%
+  group_by(month)%>%
+  summarize(total_confirmed= sum(confirmed),
+            total_deaths= sum(deaths),
+            total_recovered= sum(recovered) )
+```
+
+```{r}
+ggplot(monthly_cases_india, aes(x=month, y=total_confirmed))+
+   geom_col(fill = "steelblue") +
+  labs(title="Monthly COVID-19 Confirmed Cases in India", 
+       x="Month", y="cases")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
